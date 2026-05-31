@@ -78,33 +78,99 @@ export default function TripDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4">
-        <button onClick={() => navigate('/dashboard')} className="text-gray-400 hover:text-gray-700">
-          <ArrowLeft className="w-5 h-5" />
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-start sm:items-center gap-3">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="text-gray-400 hover:text-gray-700 transition mt-0.5 sm:mt-0 shrink-0"
+          aria-label="Back to dashboard"
+        >
+          <ArrowLeft className="w-5 h-5" aria-hidden="true" />
         </button>
-        <div className="flex-1">
-          <h1 className="text-lg font-bold text-gray-800 line-clamp-1">{trip.title}</h1>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mt-0.5">
-            <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-indigo-400" />{trip.destination}</span>
-            <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-indigo-400" />{trip.startDate} → {trip.endDate}</span>
-            <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5 text-indigo-400" />Est. ${trip.estimatedCostUsd.toFixed(0)} / ${trip.budgetUsd.toFixed(0)}</span>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-gray-800 line-clamp-1">{trip.title}</h1>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-500 mt-0.5">
+            <span className="flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" aria-hidden="true" />
+              {trip.destination}
+            </span>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0" aria-hidden="true" />
+              {trip.startDate} → {trip.endDate}
+            </span>
+            <span className="flex items-center gap-1">
+              <DollarSign className="w-3.5 h-3.5 text-indigo-400 shrink-0" aria-hidden="true" />
+              Est. ${trip.estimatedCostUsd.toFixed(0)} / ${trip.budgetUsd.toFixed(0)}
+            </span>
           </div>
         </div>
         {weather && (
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
-            <img src={weather.icon} className="w-8 h-8" alt={weather.condition} />
-            <div className="text-sm">
+          <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 shrink-0">
+            <img src={weather.icon} className="w-7 h-7 sm:w-8 sm:h-8" alt={weather.condition} />
+            <div className="text-xs sm:text-sm">
               <p className="font-medium text-gray-700">{weather.tempCelsius.toFixed(1)}°C</p>
-              <p className="text-gray-400">{weather.condition}</p>
+              <p className="text-gray-400 hidden sm:block">{weather.condition}</p>
             </div>
-            {weather.hasAlert && <CloudRain className="w-4 h-4 text-amber-500 ml-1" />}
+            {weather.hasAlert && <CloudRain className="w-4 h-4 text-amber-500 ml-1" aria-label="Weather alert" />}
           </div>
         )}
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Itinerary sidebar */}
-        <div className="w-full md:w-96 flex-shrink-0 overflow-y-auto bg-white border-r border-gray-100 py-4">
+      {/* On mobile: map on top (fixed height), itinerary below. On md+: side by side */}
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* Map — on mobile shows first as a fixed-height strip */}
+        <div className="h-56 sm:h-72 md:h-auto md:flex-1 relative order-first md:order-last">
+          {mapsLoaded ? (
+            <GoogleMap
+              mapContainerStyle={{ width: '100%', height: '100%' }}
+              center={center}
+              zoom={12}
+              options={{ disableDefaultUI: false, streetViewControl: false, mapTypeControl: false }}
+            >
+              {trip.days.map((day, dayIdx) => (
+                <Polyline
+                  key={day.id}
+                  path={routeForDay(dayIdx)}
+                  options={{ strokeColor: DAY_COLORS[dayIdx % DAY_COLORS.length], strokeWeight: 3, strokeOpacity: 0.7 }}
+                />
+              ))}
+              {trip.days.map((day, dayIdx) =>
+                day.activities.filter((a) => a.latitude && a.longitude).map((act) => (
+                  <Marker
+                    key={act.id}
+                    position={{ lat: act.latitude!, lng: act.longitude! }}
+                    onClick={() => setSelectedActivity(selectedActivity?.id === act.id ? null : act)}
+                    label={{ text: String(act.orderIndex), color: '#fff', fontWeight: 'bold', fontSize: '11px' }}
+                    icon={{
+                      path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+                      fillColor: DAY_COLORS[dayIdx % DAY_COLORS.length],
+                      fillOpacity: 1,
+                      strokeWeight: 0,
+                      scale: 1.6,
+                      anchor: new window.google.maps.Point(12, 22),
+                    }}
+                  />
+                ))
+              )}
+              {selectedActivity && selectedActivity.latitude && selectedActivity.longitude && (
+                <InfoWindow
+                  position={{ lat: selectedActivity.latitude, lng: selectedActivity.longitude }}
+                  onCloseClick={() => setSelectedActivity(null)}
+                >
+                  <div className="max-w-[240px]">
+                    <p className="font-bold text-sm">{selectedActivity.name}</p>
+                    {selectedActivity.address && <p className="text-xs text-gray-500 mt-0.5">{selectedActivity.address}</p>}
+                    {selectedActivity.description && <p className="text-xs text-gray-600 mt-1">{selectedActivity.description}</p>}
+                  </div>
+                </InfoWindow>
+              )}
+            </GoogleMap>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-400">Loading map…</div>
+          )}
+        </div>
+
+        {/* Itinerary panel */}
+        <div className="w-full md:w-96 shrink-0 overflow-y-auto bg-white border-t md:border-t-0 md:border-r border-gray-100 py-4 order-last md:order-first">
           {trip.days.map((day, dayIdx) => (
             <div key={day.id} className="border-b border-gray-100 last:border-0">
               <button
@@ -160,57 +226,6 @@ export default function TripDetailPage() {
           ))}
         </div>
 
-        {/* Map */}
-        <div className="flex-1 relative">
-          {mapsLoaded ? (
-            <GoogleMap
-              mapContainerStyle={{ width: '100%', height: '100%' }}
-              center={center}
-              zoom={12}
-              options={{ disableDefaultUI: false, streetViewControl: false, mapTypeControl: false }}
-            >
-              {trip.days.map((day, dayIdx) => (
-                <Polyline
-                  key={day.id}
-                  path={routeForDay(dayIdx)}
-                  options={{ strokeColor: DAY_COLORS[dayIdx % DAY_COLORS.length], strokeWeight: 3, strokeOpacity: 0.7 }}
-                />
-              ))}
-              {trip.days.map((day, dayIdx) =>
-                day.activities.filter((a) => a.latitude && a.longitude).map((act) => (
-                  <Marker
-                    key={act.id}
-                    position={{ lat: act.latitude!, lng: act.longitude! }}
-                    onClick={() => setSelectedActivity(selectedActivity?.id === act.id ? null : act)}
-                    label={{ text: String(act.orderIndex), color: '#fff', fontWeight: 'bold', fontSize: '11px' }}
-                    icon={{
-                      path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-                      fillColor: DAY_COLORS[dayIdx % DAY_COLORS.length],
-                      fillOpacity: 1,
-                      strokeWeight: 0,
-                      scale: 1.6,
-                      anchor: new window.google.maps.Point(12, 22),
-                    }}
-                  />
-                ))
-              )}
-              {selectedActivity && selectedActivity.latitude && selectedActivity.longitude && (
-                <InfoWindow
-                  position={{ lat: selectedActivity.latitude, lng: selectedActivity.longitude }}
-                  onCloseClick={() => setSelectedActivity(null)}
-                >
-                  <div className="max-w-xs">
-                    <p className="font-bold text-sm">{selectedActivity.name}</p>
-                    {selectedActivity.address && <p className="text-xs text-gray-500 mt-0.5">{selectedActivity.address}</p>}
-                    {selectedActivity.description && <p className="text-xs text-gray-600 mt-1">{selectedActivity.description}</p>}
-                  </div>
-                </InfoWindow>
-              )}
-            </GoogleMap>
-          ) : (
-            <div className="flex items-center justify-center h-full text-gray-400">Loading map…</div>
-          )}
-        </div>
       </div>
     </div>
   )

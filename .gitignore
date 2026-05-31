@@ -4,6 +4,7 @@ secrets/
 **/.env.local
 **/.env.*.local
 frontend/.env
+infra/.env.deploy
 
 # .NET
 **/bin/

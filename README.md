@@ -2,7 +2,7 @@
 
 A full-stack web app that generates AI-powered day-by-day travel itineraries with real-time weather alerts.
 
-**Stack:** React 19 + TypeScript + Tailwind · ASP.NET Core 9 · PostgreSQL · Firebase Auth · GCP (Cloud Run, Cloud SQL, Pub/Sub)
+**Stack:** React 19 + TypeScript + Tailwind CSS v4 · ASP.NET Core 8 · PostgreSQL 16 · Firebase Auth · GCP (Cloud Run, Cloud SQL, Pub/Sub)
 
 ---
 
@@ -14,7 +14,7 @@ Make sure these are installed:
 
 | Tool | Check |
 |---|---|
-| .NET 9 SDK | `dotnet --version` → `9.x` |
+| .NET 8 SDK | `dotnet --version` → `8.x` |
 | Node.js 20+ | `node --version` |
 | Docker Desktop | running (for PostgreSQL) |
 | gcloud CLI | `gcloud --version` |
@@ -148,7 +148,7 @@ API calls are proxied automatically to `http://localhost:5152`.
 | Sign up / Sign in (Email + Google) | ✅ Works — needs Firebase only |
 | User profile stored in PostgreSQL | ✅ Works |
 | View trip dashboard | ✅ Works |
-| Create trip (POST /api/trips/plan) | ⚙️ Needs Gemini API enabled |
+| Create trip with itinerary | ✅ Works — template-based generator (no GCP needed) |
 | Trip itinerary detail page | ✅ Works once a trip exists |
 | Google Maps on itinerary | ✅ Works with Maps API key |
 | Real-time weather alerts (SSE) | ⚙️ Needs Cloud Pub/Sub enabled |
@@ -164,7 +164,6 @@ API calls are proxied automatically to `http://localhost:5152`.
 gcloud services enable \
   sqladmin.googleapis.com \
   pubsub.googleapis.com \
-  aiplatform.googleapis.com \
   secretmanager.googleapis.com \
   artifactregistry.googleapis.com \
   run.googleapis.com
@@ -183,19 +182,52 @@ gcloud pubsub subscriptions create trip-updates-sub   --topic=trip-updates   --a
 
 ## Cloud Deployment
 
-Once GCP is configured:
+### 1. Fill in deployment config
+
+Copy the template and fill in your values:
 
 ```bash
-export GCP_PROJECT_ID=your-gcp-project-id
-export FIREBASE_PROJECT_ID=your-firebase-project-id
-export OPENWEATHERMAP_API_KEY=your-key
-export DB_PASSWORD=your-db-password
-
-chmod +x infra/deploy.sh
-./infra/deploy.sh
+cp infra/.env.deploy.example infra/.env.deploy
+# then edit infra/.env.deploy
 ```
 
-The script provisions Cloud SQL, pushes Docker images to Artifact Registry, and deploys both services to Cloud Run.
+Required values in `infra/.env.deploy`:
+
+```env
+GCP_PROJECT_ID=your-gcp-project-id
+DB_PASSWORD=choose-a-strong-password
+OPENWEATHERMAP_API_KEY=your-key        # openweathermap.org → free signup
+FIREBASE_PROJECT_ID=your-firebase-project-id
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+VITE_GOOGLE_MAPS_API_KEY=...           # console.cloud.google.com → Maps JavaScript API
+```
+
+> `infra/.env.deploy` is gitignored — your secrets stay local.
+
+### 2. Run the script (Git Bash or WSL on Windows)
+
+```bash
+bash infra/deploy.sh
+```
+
+The script automatically:
+- Enables required GCP APIs
+- Creates a service account with least-privilege roles
+- Provisions Cloud SQL PostgreSQL 15 (auto-starts if stopped)
+- Stores secrets in Secret Manager
+- Creates Pub/Sub topics (`weather-alerts`, `trip-updates`)
+- Builds and pushes Docker images to Artifact Registry
+- Deploys backend + frontend to Cloud Run
+- Prints the live URLs
+
+### 3. After deployment
+
+Add your Cloud Run frontend URL to Firebase authorized domains:
+**Firebase Console → Authentication → Settings → Authorized domains → Add domain**
 
 ---
 

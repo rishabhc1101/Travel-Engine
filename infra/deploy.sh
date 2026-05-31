@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 # deploy.sh — GCP Cloud Run deployment for TravelEngine
 # Usage: ./infra/deploy.sh
+#
+# Values are loaded from infra/.env.deploy (never committed to git).
+# Copy infra/.env.deploy.example → infra/.env.deploy and fill in your values.
 set -euo pipefail
+
+# ── Load secrets from .env.deploy if present ─────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Always run from the repo root so relative paths (./backend, ./frontend) work
+cd "${SCRIPT_DIR}/.."
+if [[ -f "${SCRIPT_DIR}/.env.deploy" ]]; then
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/.env.deploy"
+  echo "✅ Loaded config from .env.deploy"
+fi
 
 # ── Configuration ────────────────────────────────────────────────
 GCP_PROJECT_ID="${GCP_PROJECT_ID:?Set GCP_PROJECT_ID env var}"
@@ -10,6 +23,15 @@ FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:?Set FIREBASE_PROJECT_ID env var}"
 OPENWEATHERMAP_API_KEY="${OPENWEATHERMAP_API_KEY:?Set OPENWEATHERMAP_API_KEY env var}"
 DB_PASSWORD="${DB_PASSWORD:?Set DB_PASSWORD env var}"
 CORS_ORIGIN="${CORS_ORIGIN:-https://frontend-HASH-uc.a.run.app}"
+
+# Firebase config (public values, baked into the frontend JS bundle)
+VITE_FIREBASE_API_KEY="${VITE_FIREBASE_API_KEY:?Set VITE_FIREBASE_API_KEY}"
+VITE_FIREBASE_AUTH_DOMAIN="${VITE_FIREBASE_AUTH_DOMAIN:?Set VITE_FIREBASE_AUTH_DOMAIN}"
+VITE_FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID}"
+VITE_FIREBASE_STORAGE_BUCKET="${VITE_FIREBASE_STORAGE_BUCKET:?Set VITE_FIREBASE_STORAGE_BUCKET}"
+VITE_FIREBASE_MESSAGING_SENDER_ID="${VITE_FIREBASE_MESSAGING_SENDER_ID:?Set VITE_FIREBASE_MESSAGING_SENDER_ID}"
+VITE_FIREBASE_APP_ID="${VITE_FIREBASE_APP_ID:?Set VITE_FIREBASE_APP_ID}"
+VITE_GOOGLE_MAPS_API_KEY="${VITE_GOOGLE_MAPS_API_KEY:-}"
 
 ARTIFACT_REGISTRY_REPO="travel-engine"
 BACKEND_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/api"
@@ -25,7 +47,6 @@ gcloud services enable \
   run.googleapis.com \
   sqladmin.googleapis.com \
   pubsub.googleapis.com \
-  aiplatform.googleapis.com \
   secretmanager.googleapis.com \
   artifactregistry.googleapis.com \
   --project="${GCP_PROJECT_ID}"
@@ -46,7 +67,6 @@ gcloud iam service-accounts create "${SA_NAME}" \
 for ROLE in \
   roles/cloudsql.client \
   roles/pubsub.editor \
-  roles/aiplatform.user \
   roles/secretmanager.secretAccessor; do
   gcloud projects add-iam-policy-binding "${GCP_PROJECT_ID}" \
     --member="serviceAccount:${SA_EMAIL}" \
@@ -60,6 +80,19 @@ gcloud sql instances create travel-engine-db \
   --region="${GCP_REGION}" \
   --storage-auto-increase \
   --project="${GCP_PROJECT_ID}" 2>/dev/null || echo "SQL instance already exists"
+
+# Ensure the instance is started (handles stopped instances from previous runs)
+gcloud sql instances patch travel-engine-db \
+  --activation-policy=ALWAYS \
+  --project="${GCP_PROJECT_ID}" --quiet 2>/dev/null || true
+
+echo "⏳ Waiting for Cloud SQL instance to be RUNNABLE..."
+until [[ "$(gcloud sql instances describe travel-engine-db \
+  --project="${GCP_PROJECT_ID}" --format='value(state)')" == "RUNNABLE" ]]; do
+  echo -n "."
+  sleep 5
+done
+echo " ready!"
 
 gcloud sql databases create travelengine \
   --instance=travel-engine-db \
@@ -102,7 +135,15 @@ docker build -t "${BACKEND_IMAGE}:latest" ./backend/TravelEngine.Api
 docker push "${BACKEND_IMAGE}:latest"
 
 echo "📦 Building frontend image..."
-docker build -t "${FRONTEND_IMAGE}:latest" ./frontend
+docker build \
+  --build-arg VITE_FIREBASE_API_KEY="${VITE_FIREBASE_API_KEY}" \
+  --build-arg VITE_FIREBASE_AUTH_DOMAIN="${VITE_FIREBASE_AUTH_DOMAIN}" \
+  --build-arg VITE_FIREBASE_PROJECT_ID="${VITE_FIREBASE_PROJECT_ID}" \
+  --build-arg VITE_FIREBASE_STORAGE_BUCKET="${VITE_FIREBASE_STORAGE_BUCKET}" \
+  --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID="${VITE_FIREBASE_MESSAGING_SENDER_ID}" \
+  --build-arg VITE_FIREBASE_APP_ID="${VITE_FIREBASE_APP_ID}" \
+  --build-arg VITE_GOOGLE_MAPS_API_KEY="${VITE_GOOGLE_MAPS_API_KEY}" \
+  -t "${FRONTEND_IMAGE}:latest" ./frontend
 docker push "${FRONTEND_IMAGE}:latest"
 
 # ── Deploy backend to Cloud Run ──────────────────────────────────
@@ -142,6 +183,7 @@ gcloud run deploy travel-engine-frontend \
   --region="${GCP_REGION}" \
   --platform=managed \
   --allow-unauthenticated \
+  --set-env-vars="BACKEND_URL=${BACKEND_URL}" \
   --port=80 \
   --project="${GCP_PROJECT_ID}"
 
