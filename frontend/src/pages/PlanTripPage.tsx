@@ -1,19 +1,59 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
 import type { PlanTripRequest } from '../types/travel'
 import toast from 'react-hot-toast'
-import { Plane, Loader2, Calendar } from 'lucide-react'
+import { Loader2, Calendar, MapPin, Sparkles } from 'lucide-react'
 
 const INTEREST_OPTIONS = ['Culture', 'Adventure', 'Food', 'Nature', 'History', 'Shopping', 'Nightlife', 'Wellness', 'Art', 'Sports']
 const CONSTRAINT_OPTIONS = ['Vegetarian', 'Wheelchair accessible', 'Family-friendly', 'Pet-friendly', 'Budget hotels only', 'No flights', 'Avoid crowded places']
 
 const today = new Date().toISOString().split('T')[0]
 
+const POPULAR_DESTINATIONS = [
+  'Tokyo, Japan', 'Kyoto, Japan', 'Osaka, Japan',
+  'Paris, France', 'Nice, France',
+  'New York, USA', 'Los Angeles, USA', 'Las Vegas, USA', 'San Francisco, USA',
+  'London, UK', 'Edinburgh, UK',
+  'Bali, Indonesia', 'Jakarta, Indonesia',
+  'Rome, Italy', 'Florence, Italy', 'Venice, Italy', 'Milan, Italy',
+  'Barcelona, Spain', 'Madrid, Spain',
+  'Amsterdam, Netherlands', 'Singapore', 'Dubai, UAE',
+  'Sydney, Australia', 'Melbourne, Australia',
+  'Bangkok, Thailand', 'Phuket, Thailand', 'Chiang Mai, Thailand',
+  'Istanbul, Turkey', 'Prague, Czech Republic', 'Vienna, Austria',
+  'Santorini, Greece', 'Athens, Greece', 'Maldives',
+  'Cape Town, South Africa', 'Marrakech, Morocco', 'Cairo, Egypt',
+  'Mumbai, India', 'Delhi, India', 'Goa, India', 'Jaipur, India', 'Agra, India', 'Bangalore, India',
+  'Seoul, South Korea', 'Hong Kong',
+  'Zurich, Switzerland', 'Copenhagen, Denmark', 'Stockholm, Sweden',
+  'Lisbon, Portugal', 'Dublin, Ireland', 'Budapest, Hungary',
+  'Vancouver, Canada', 'Toronto, Canada',
+  'Mexico City, Mexico', 'Buenos Aires, Argentina',
+  'Queenstown, New Zealand', 'Reykjavik, Iceland',
+]
+
+const CURRENCIES = {
+  USD: { symbol: '$',   rate: 1 },
+  EUR: { symbol: '€',   rate: 0.92 },
+  GBP: { symbol: '£',   rate: 0.79 },
+  INR: { symbol: '₹',   rate: 83.5 },
+  JPY: { symbol: '¥',   rate: 149 },
+  AED: { symbol: 'AED', rate: 3.67 },
+  CAD: { symbol: 'C$',  rate: 1.36 },
+  AUD: { symbol: 'A$',  rate: 1.52 },
+  SGD: { symbol: 'S$',  rate: 1.34 },
+} as const
+type CurrencyCode = keyof typeof CURRENCIES
+
 export default function PlanTripPage() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [budgetFocused, setBudgetFocused] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>('USD')
+  const [budgetRaw, setBudgetRaw] = useState('1000')
+  const suggestRef = useRef<HTMLDivElement>(null)
   const [form, setForm] = useState<PlanTripRequest>({
     destination: '',
     startDate: '',
@@ -24,6 +64,12 @@ export default function PlanTripPage() {
     constraints: [],
   })
 
+  const filteredSuggestions = form.destination.length >= 2
+    ? POPULAR_DESTINATIONS.filter((d) =>
+        d.toLowerCase().includes(form.destination.toLowerCase())
+      ).slice(0, 7)
+    : []
+
   const toggleItem = (key: 'interests' | 'constraints', value: string) => {
     setForm((f) => ({
       ...f,
@@ -31,9 +77,24 @@ export default function PlanTripPage() {
     }))
   }
 
+  const handleCurrencyChange = (cur: CurrencyCode) => {
+    setSelectedCurrency(cur)
+    setBudgetRaw(Math.round(form.budgetUsd * CURRENCIES[cur].rate).toString())
+  }
+
+  const handleBudgetBlur = () => {
+    setBudgetFocused(false)
+    const rate = CURRENCIES[selectedCurrency].rate
+    const inputVal = parseFloat(budgetRaw.replace(/,/g, '')) || 50
+    const usdVal = Math.round(Math.min(10000, Math.max(50, inputVal / rate)))
+    setForm((f) => ({ ...f, budgetUsd: usdVal }))
+    setBudgetRaw(Math.round(usdVal * rate).toString())
+  }
+
   const handleBudget = (val: number) => {
     const clamped = Math.min(10000, Math.max(50, val))
     setForm((f) => ({ ...f, budgetUsd: clamped }))
+    setBudgetRaw(Math.round(clamped * CURRENCIES[selectedCurrency].rate).toString())
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,7 +119,7 @@ export default function PlanTripPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 sm:py-10">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         <button
           onClick={() => navigate('/dashboard')}
           className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-6 transition-colors"
@@ -69,9 +130,7 @@ export default function PlanTripPage() {
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-8">
           <div className="flex items-center gap-3 mb-6">
-            <div className="bg-indigo-600 rounded-full p-2 shrink-0">
-              <Plane className="text-white w-5 h-5" aria-hidden="true" />
-            </div>
+            <img src="/logo.avif" alt="TravelEngine" className="h-10 w-10 rounded-full object-cover shrink-0" />
             <div>
               <h1 className="text-xl font-bold text-gray-800">Plan Your Trip</h1>
               <p className="text-sm text-gray-500">Fill in the details and we'll build your itinerary</p>
@@ -79,22 +138,42 @@ export default function PlanTripPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Destination */}
+            {/* Destination with suggestions */}
             <div>
               <label htmlFor="destination" className="block text-sm font-medium text-gray-700 mb-1">
                 Destination <span aria-hidden="true">*</span>
               </label>
-              <input
-                id="destination"
-                type="text"
-                required
-                autoComplete="off"
-                value={form.destination}
-                onChange={(e) => setForm({ ...form, destination: e.target.value })}
-                placeholder="e.g. Tokyo, Japan or Kyoto temples circuit"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
-                aria-required="true"
-              />
+              <div className="relative" ref={suggestRef}>
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" aria-hidden="true" />
+                <input
+                  id="destination"
+                  type="text"
+                  required
+                  autoComplete="off"
+                  value={form.destination}
+                  onChange={(e) => { setForm({ ...form, destination: e.target.value }); setShowSuggestions(true) }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  placeholder="e.g. Tokyo, Japan or Bali, Indonesia"
+                  className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+                  aria-required="true"
+                />
+                {showSuggestions && filteredSuggestions.length > 0 && (
+                  <div className="absolute z-20 top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg mt-1 overflow-hidden">
+                    {filteredSuggestions.map((dest) => (
+                      <button
+                        key={dest}
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 flex items-center gap-2.5 transition-colors"
+                        onMouseDown={() => { setForm({ ...form, destination: dest }); setShowSuggestions(false) }}
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" aria-hidden="true" />
+                        {dest}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Dates — native date picker, stacks on small screens */}
@@ -143,8 +222,18 @@ export default function PlanTripPage() {
                 Total Budget (USD) <span aria-hidden="true">*</span>
               </label>
 
-              {/* Animated number input */}
-              <div className="flex items-center gap-3 mb-3">
+              {/* Currency selector + free-type budget input */}
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <select
+                  value={selectedCurrency}
+                  onChange={(e) => handleCurrencyChange(e.target.value as CurrencyCode)}
+                  className="border border-gray-200 rounded-xl px-2 py-2.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white cursor-pointer"
+                  aria-label="Select currency"
+                >
+                  {(Object.keys(CURRENCIES) as CurrencyCode[]).map((cur) => (
+                    <option key={cur} value={cur}>{cur} {CURRENCIES[cur].symbol}</option>
+                  ))}
+                </select>
                 <div
                   className={`flex items-center border-2 rounded-xl overflow-hidden transition-all duration-200 ${
                     budgetFocused
@@ -152,28 +241,31 @@ export default function PlanTripPage() {
                       : 'border-gray-200'
                   }`}
                 >
-                  <span className="pl-3 pr-1 text-gray-400 font-semibold select-none" aria-hidden="true">$</span>
+                  <span className="pl-3 pr-1 text-gray-400 font-semibold select-none" aria-hidden="true">{CURRENCIES[selectedCurrency].symbol}</span>
                   <input
-                    type="number"
-                    min={50}
-                    max={10000}
-                    step={50}
-                    value={form.budgetUsd}
+                    type="text"
+                    inputMode="numeric"
+                    value={budgetRaw}
                     onFocus={() => setBudgetFocused(true)}
-                    onBlur={() => setBudgetFocused(false)}
-                    onChange={(e) => handleBudget(Number(e.target.value))}
-                    className="w-24 py-2.5 pr-3 text-lg font-bold text-indigo-600 focus:outline-none bg-transparent tabular-nums"
-                    aria-label="Budget in USD"
+                    onBlur={handleBudgetBlur}
+                    onChange={(e) => setBudgetRaw(e.target.value)}
+                    className="w-28 py-2.5 pr-3 text-lg font-bold text-indigo-600 focus:outline-none bg-transparent tabular-nums"
+                    aria-label={`Budget in ${selectedCurrency}`}
                   />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-[80px]">
                   <div className="text-xs text-gray-400">
                     {form.budgetUsd <= 500 && 'Budget travel'}
                     {form.budgetUsd > 500 && form.budgetUsd <= 2500 && 'Mid-range'}
                     {form.budgetUsd > 2500 && form.budgetUsd <= 6000 && 'Comfortable'}
-                    {form.budgetUsd > 6000 && 'Luxury'}
+                    {form.budgetUsd > 6000 && '✨ Luxury'}
                   </div>
-                  <div className="text-xs text-gray-300 mt-0.5">per entire trip</div>
+                  {selectedCurrency !== 'USD' && (
+                    <div className="text-xs text-indigo-400 mt-0.5 font-medium">≈ ${form.budgetUsd} USD</div>
+                  )}
+                  {selectedCurrency === 'USD' && (
+                    <div className="text-xs text-gray-300 mt-0.5">per entire trip</div>
+                  )}
                 </div>
               </div>
 
@@ -269,7 +361,7 @@ export default function PlanTripPage() {
               {loading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Generating itinerary…</>
               ) : (
-                <><Plane className="w-4 h-4" aria-hidden="true" /> Generate Itinerary</>
+                <><Sparkles className="w-4 h-4" aria-hidden="true" /> Generate Itinerary</>
               )}
             </button>
           </form>

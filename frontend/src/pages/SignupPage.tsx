@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
-import { Plane } from 'lucide-react'
 
 export default function SignupPage() {
   const { signUpWithEmail, signInWithGoogle } = useAuth()
@@ -39,9 +38,7 @@ export default function SignupPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
         <div className="flex flex-col items-center mb-8">
-          <div className="bg-indigo-600 rounded-full p-3 mb-3">
-            <Plane className="text-white w-7 h-7" />
-          </div>
+          <img src="/logo.avif" alt="TravelEngine" className="h-16 w-16 rounded-full object-cover mb-3" />
           <h1 className="text-2xl font-bold text-gray-800">Create Account</h1>
         </div>
 

@@ -24,54 +24,68 @@ public class PubSubService(IConfiguration config, ILogger<PubSubService> logger)
 
     public async Task PublishWeatherAlertAsync(Guid tripId, WeatherInfo weather, CancellationToken ct = default)
     {
-        var topicName = TopicName.FromProjectTopic(_projectId, WeatherAlertTopic);
-        var publisher = await PublisherClient.CreateAsync(topicName);
-
-        var payload = JsonSerializer.Serialize(new
+        try
         {
-            tripId = tripId.ToString(),
-            type = "weather-alert",
-            destination = weather.Destination,
-            condition = weather.Condition,
-            tempCelsius = weather.TempCelsius,
-            windKph = weather.WindKph,
-            icon = weather.Icon,
-            alertDescription = weather.AlertDescription,
-            timestamp = DateTime.UtcNow
-        });
+            var topicName = TopicName.FromProjectTopic(_projectId, WeatherAlertTopic);
+            var publisher = await PublisherClient.CreateAsync(topicName);
 
-        var message = new PubsubMessage
+            var payload = JsonSerializer.Serialize(new
+            {
+                tripId = tripId.ToString(),
+                type = "weather-alert",
+                destination = weather.Destination,
+                condition = weather.Condition,
+                tempCelsius = weather.TempCelsius,
+                windKph = weather.WindKph,
+                icon = weather.Icon,
+                alertDescription = weather.AlertDescription,
+                timestamp = DateTime.UtcNow
+            });
+
+            var message = new PubsubMessage
+            {
+                Data = ByteString.CopyFromUtf8(payload),
+                Attributes = { { "tripId", tripId.ToString() } }
+            };
+
+            var msgId = await publisher.PublishAsync(message);
+            logger.LogInformation("Published weather alert {msgId} for trip {tripId}", msgId, tripId);
+            await publisher.ShutdownAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
         {
-            Data = ByteString.CopyFromUtf8(payload),
-            Attributes = { { "tripId", tripId.ToString() } }
-        };
-
-        var msgId = await publisher.PublishAsync(message);
-        logger.LogInformation("Published weather alert {msgId} for trip {tripId}", msgId, tripId);
-        await publisher.ShutdownAsync(TimeSpan.FromSeconds(5));
+            logger.LogWarning(ex, "Pub/Sub unavailable — skipping weather alert for trip {tripId}. Configure GCP ADC for real-time features.", tripId);
+        }
     }
 
     public async Task PublishTripUpdateAsync(Guid tripId, string message, CancellationToken ct = default)
     {
-        var topicName = TopicName.FromProjectTopic(_projectId, TripUpdatesTopic);
-        var publisher = await PublisherClient.CreateAsync(topicName);
-
-        var payload = JsonSerializer.Serialize(new
+        try
         {
-            tripId = tripId.ToString(),
-            type = "trip-update",
-            message,
-            timestamp = DateTime.UtcNow
-        });
+            var topicName = TopicName.FromProjectTopic(_projectId, TripUpdatesTopic);
+            var publisher = await PublisherClient.CreateAsync(topicName);
 
-        var pubsubMessage = new PubsubMessage
+            var payload = JsonSerializer.Serialize(new
+            {
+                tripId = tripId.ToString(),
+                type = "trip-update",
+                message,
+                timestamp = DateTime.UtcNow
+            });
+
+            var pubsubMessage = new PubsubMessage
+            {
+                Data = ByteString.CopyFromUtf8(payload),
+                Attributes = { { "tripId", tripId.ToString() } }
+            };
+
+            await publisher.PublishAsync(pubsubMessage);
+            await publisher.ShutdownAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
         {
-            Data = ByteString.CopyFromUtf8(payload),
-            Attributes = { { "tripId", tripId.ToString() } }
-        };
-
-        await publisher.PublishAsync(pubsubMessage);
-        await publisher.ShutdownAsync(TimeSpan.FromSeconds(5));
+            logger.LogWarning(ex, "Pub/Sub unavailable — skipping trip update for trip {tripId}. Configure GCP ADC for real-time features.", tripId);
+        }
     }
 
     public async IAsyncEnumerable<string> SubscribeToTripEventsAsync(

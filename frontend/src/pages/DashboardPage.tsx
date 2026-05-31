@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import api from '../lib/api'
 import type { TripSummary } from '../types/travel'
-import { Plane, Plus, MapPin, Calendar, DollarSign, LogOut } from 'lucide-react'
+import { MapPinned, Plus, MapPin, Calendar, DollarSign, LogOut } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function DashboardPage() {
@@ -31,9 +31,7 @@ export default function DashboardPage() {
       {/* Nav */}
       <nav className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 shrink-0">
-          <div className="bg-indigo-600 rounded-full p-1.5" aria-hidden="true">
-            <Plane className="text-white w-4 h-4" />
-          </div>
+          <img src="/logo.avif" alt="TravelEngine" className="h-8 w-8 rounded-full object-cover" />
           <span className="font-bold text-gray-800 text-lg">TravelEngine</span>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
@@ -51,7 +49,7 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header row — stacks on very small screens */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
@@ -67,7 +65,7 @@ export default function DashboardPage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="bg-white rounded-2xl p-5 shadow-sm animate-pulse h-40" aria-hidden="true" />
             ))}
@@ -75,7 +73,7 @@ export default function DashboardPage() {
         ) : trips.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4">
             <div className="bg-indigo-50 rounded-full p-6 mb-4" aria-hidden="true">
-              <Plane className="w-10 h-10 text-indigo-400" />
+              <MapPinned className="w-10 h-10 text-indigo-400" />
             </div>
             <h2 className="text-xl font-semibold text-gray-700 mb-2">No trips yet</h2>
             <p className="text-gray-400 mb-6 max-w-sm">Tell our planner where you want to go and we'll build your itinerary.</p>
@@ -87,7 +85,7 @@ export default function DashboardPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {trips.map((trip) => (
               <Link
                 key={trip.id}

@@ -44,6 +44,7 @@ builder.Services.AddCors(options =>
 
 // ── HTTP Clients ──────────────────────────────────────────────
 builder.Services.AddHttpClient("weather");
+builder.Services.AddHttpClient("gemini");
 
 // ── Application Services ──────────────────────────────────────
 builder.Services.AddScoped<IGeminiService, GeminiService>();

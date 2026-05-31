@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { GoogleMap, useJsApiLoader, Marker, Polyline, InfoWindow } from '@react-google-maps/api'
+
+const MAPS_LIBRARIES: Parameters<typeof useJsApiLoader>[0]['libraries'] = []
 import api from '../lib/api'
 import type { TripDetail, Activity, WeatherInfo } from '../types/travel'
 import { useTripStream } from '../hooks/useTripStream'
@@ -28,11 +30,14 @@ export default function TripDetailPage() {
   const [openDay, setOpenDay] = useState<number>(1)
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 20, lng: 0 })
+  const mapInstanceRef = useRef<google.maps.Map | null>(null)
 
   useTripStream(id)
 
   const { isLoaded: mapsLoaded } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '',
+    libraries: MAPS_LIBRARIES,
   })
 
   useEffect(() => {
@@ -60,15 +65,31 @@ export default function TripDetailPage() {
       .finally(() => setLoading(false))
   }, [id])
 
+  // Geocode destination when maps are loaded and trip has no stored coordinates
+  useEffect(() => {
+    if (!mapsLoaded || !trip) return
+    const allActs = trip.days.flatMap((d) => d.activities.filter((a) => a.latitude && a.longitude))
+    if (trip.latitude && trip.longitude) {
+      setMapCenter({ lat: trip.latitude, lng: trip.longitude })
+    } else if (allActs.length > 0) {
+      setMapCenter({ lat: allActs[0].latitude!, lng: allActs[0].longitude! })
+    } else {
+      // Geocode the destination name for a sensible map center
+      const geocoder = new window.google.maps.Geocoder()
+      geocoder.geocode({ address: trip.destination }, (results, status) => {
+        if (status === 'OK' && results?.[0]) {
+          const loc = results[0].geometry.location
+          const newCenter = { lat: loc.lat(), lng: loc.lng() }
+          setMapCenter(newCenter)
+          mapInstanceRef.current?.panTo(newCenter)
+          mapInstanceRef.current?.setZoom(12)
+        }
+      })
+    }
+  }, [mapsLoaded, trip])
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading trip…</div>
   if (!trip) return <div className="min-h-screen flex items-center justify-center text-red-400">Trip not found.</div>
-
-  const allActivities = trip.days.flatMap((d) => d.activities.filter((a) => a.latitude && a.longitude))
-  const center = trip.latitude && trip.longitude
-    ? { lat: trip.latitude, lng: trip.longitude }
-    : allActivities.length > 0
-      ? { lat: allActivities[0].latitude!, lng: allActivities[0].longitude! }
-      : { lat: 0, lng: 0 }
 
   const routeForDay = (dayIdx: number) =>
     trip.days[dayIdx].activities
@@ -122,9 +143,10 @@ export default function TripDetailPage() {
           {mapsLoaded ? (
             <GoogleMap
               mapContainerStyle={{ width: '100%', height: '100%' }}
-              center={center}
+              center={mapCenter}
               zoom={12}
               options={{ disableDefaultUI: false, streetViewControl: false, mapTypeControl: false }}
+              onLoad={(map) => { mapInstanceRef.current = map }}
             >
               {trip.days.map((day, dayIdx) => (
                 <Polyline

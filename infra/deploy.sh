@@ -119,6 +119,8 @@ store_secret() {
 DB_CONN_STR="Host=/cloudsql/${CLOUD_SQL_INSTANCE};Database=travelengine;Username=postgres;Password=${DB_PASSWORD}"
 store_secret "db-connection-string" "${DB_CONN_STR}"
 store_secret "openweathermap-api-key" "${OPENWEATHERMAP_API_KEY}"
+# Gemini key is optional — store even if empty so the secret exists
+store_secret "gemini-api-key" "${GEMINI_API_KEY:-}"
 
 # ── Pub/Sub topics & subscriptions ──────────────────────────────
 for TOPIC in weather-alerts trip-updates; do
@@ -155,12 +157,11 @@ gcloud run deploy travel-engine-api \
   --allow-unauthenticated \
   --service-account="${SA_EMAIL}" \
   --add-cloudsql-instances="${CLOUD_SQL_INSTANCE}" \
-  --set-secrets="ConnectionStrings__DefaultConnection=db-connection-string:latest,Weather__OpenWeatherMapApiKey=openweathermap-api-key:latest" \
+  --set-secrets="ConnectionStrings__DefaultConnection=db-connection-string:latest,Weather__OpenWeatherMapApiKey=openweathermap-api-key:latest,Gemini__ApiKey=gemini-api-key:latest" \
   --set-env-vars="\
 Firebase__ProjectId=${FIREBASE_PROJECT_ID},\
 Gcp__ProjectId=${GCP_PROJECT_ID},\
 Gcp__Location=${GCP_REGION},\
-Gcp__GeminiModel=gemini-1.5-pro,\
 Cors__AllowedOrigins__0=${CORS_ORIGIN},\
 ASPNETCORE_ENVIRONMENT=Production" \
   --min-instances=1 \
