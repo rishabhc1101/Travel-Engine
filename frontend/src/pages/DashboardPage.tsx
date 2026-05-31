@@ -49,7 +49,7 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header row — stacks on very small screens */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
@@ -71,7 +71,11 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : trips.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4">
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4"
+          >
             <div className="bg-indigo-50 rounded-full p-6 mb-4" aria-hidden="true">
               <MapPinned className="w-10 h-10 text-indigo-400" />
             </div>

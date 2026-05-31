@@ -88,7 +88,11 @@ export default function TripDetailPage() {
     }
   }, [mapsLoaded, trip])
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading trip…</div>
+  if (loading) return (
+    <div role="status" aria-live="polite" className="min-h-screen flex items-center justify-center text-gray-400">
+      <span>Loading trip…</span>
+    </div>
+  )
   if (!trip) return <div className="min-h-screen flex items-center justify-center text-red-400">Trip not found.</div>
 
   const routeForDay = (dayIdx: number) =>
@@ -197,6 +201,8 @@ export default function TripDetailPage() {
             <div key={day.id} className="border-b border-gray-100 last:border-0">
               <button
                 onClick={() => setOpenDay(openDay === day.dayNumber ? 0 : day.dayNumber)}
+                aria-expanded={openDay === day.dayNumber}
+                aria-controls={`day-panel-${day.id}`}
                 className="w-full flex items-center gap-3 px-5 py-4 hover:bg-gray-50 transition text-left"
               >
                 <div
@@ -213,7 +219,12 @@ export default function TripDetailPage() {
               </button>
 
               {openDay === day.dayNumber && (
-                <div className="px-5 pb-4 space-y-3">
+                <div
+                  id={`day-panel-${day.id}`}
+                  role="region"
+                  aria-label={`Day ${day.dayNumber} activities`}
+                  className="px-5 pb-4 space-y-3"
+                >
                   {day.summary && <p className="text-sm text-gray-500 italic">{day.summary}</p>}
                   {day.activities.map((act) => (
                     <div
