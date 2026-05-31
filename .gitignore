@@ -1,0 +1,27 @@
+# Secrets — never commit
+secrets/
+*.json.key
+**/.env.local
+**/.env.*.local
+frontend/.env
+
+# .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Node
+**/node_modules/
+frontend/dist/
+
+# IDEs
+.vs/
+.vscode/
+*.suo
+*.user
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
